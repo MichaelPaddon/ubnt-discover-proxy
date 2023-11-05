@@ -1,8 +1,7 @@
- # ubnt-discover-proxy
+# ubnt-discover-proxy
 
 This is a simple proxy for relaying broadcast Ubiquiti discovery packets
 (UDP port 10001) onto another network.
-
 
 This code targets Python 2.7. It can run standalone on
 EdgeOS version 2 devices.
@@ -30,3 +29,7 @@ will proxy discovery packets broadcast on eth1 and eth2 onto eth0.
                           interfaces to listen on
     --broadcast IFNAME [IFNAME ...]
                           interfaces to broadcast to
+
+## Limitations
+
+You can't both listen on and broadcast to a network (yet).
