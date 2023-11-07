@@ -1,3 +1,25 @@
+#
+# This is a simple proxy for relaying broadcast Ubiquiti discovery packets
+# (UDP port 10001) onto another network.
+#
+# Latest version is at https://github.com/MichaelPaddon/ubnt-discover-proxy
+#
+# Copyright (C) 2023  Michael Paddon
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+
 import argparse
 import logging
 import logging.handlers
@@ -6,10 +28,8 @@ import select
 import socket
 import struct
 import sys
-import time
-import traceback
 
-__version__ = "0.1"
+__version__ = "0.2.0"
 
 u32 = struct.Struct("!I")
 ip_header = struct.Struct("!BBHHHBBHII")
@@ -37,6 +57,7 @@ def proxy(listen_ifnames, broadcast_ifnames):
 
     listeners = {}
     for ifname in listen_ifnames:
+        logging.info("listening on %s" % ifname)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setsockopt(socket.SOL_SOCKET, 25, ifname + "\0")
         s.bind(("", 10001))
@@ -46,6 +67,7 @@ def proxy(listen_ifnames, broadcast_ifnames):
     
     broadcasters = []
     for ifname in broadcast_ifnames:
+        logging.info("broadcasting to %s" % ifname)
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
         s.setsockopt(socket.SOL_SOCKET, 25, ifname + "\0")
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -104,33 +126,38 @@ def main():
         help = "only listen on this interface")
     parser.add_argument("--broadcast", metavar = "IFNAME", action = "append",
         help = "only broadcast to this interface")
-    parser.add_argument("ifnames", nargs="+", metavar = "IFNAME",
+    parser.add_argument("ifnames", nargs="*", metavar = "IFNAME",
         help = "both listen to and broadcast on these interfaces")
     args = parser.parse_args()
+
+    listen_ifnames = (args.ifnames or []) + (args.listen or [])
+    if not listen_ifnames:
+        raise RuntimeError("no listener interfaces defined")
+
+    broadcast_ifnames = (args.ifnames or []) + (args.broadcast or [])
+    if not broadcast_ifnames:
+        raise RuntimeError("no broadcast interfaces defined")
 
     if args.debug:
         logging.basicConfig(stream = sys.stdout,
             format = "%(asctime)s: %(levelname)s: %(message)s",
             level = logging.DEBUG)
+        proxy(listen_ifnames, broadcast_ifnames)
     else:
         logger = logging.getLogger()
-        formatter = logging.Formatter("ubnt-discover-proxy: %(levelname)s: %(message)s")
+        formatter = logging.Formatter(
+            "ubnt-discover-proxy: %(levelname)s: %(message)s")
         handler = logging.handlers.SysLogHandler(address = "/dev/log")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
-        daemonize()
-
-    try:
         logging.info("starting")
-        ifnames = args.ifnames or []
-        listen_ifnames = args.listen or []
-        broadcast_ifnames = args.broadcast or []
-        proxy(ifnames + listen_ifnames, ifnames + broadcast_ifnames)
-    except Exception as e:
-        logging.critical("terminating: %s", str(e))
-        if args.debug:
-            raise
+
+        try:
+            daemonize()
+            proxy(listen_ifnames, broadcast_ifnames)
+        except Exception as e:
+            logging.critical("terminating: %s", str(e))
 
 if __name__ == '__main__':
     sys.exit(main())
