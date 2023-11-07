@@ -27,7 +27,7 @@ will listen for broadcasts on wg0 but never broadcast to it.
 
     usage: ubnt-discover-proxy.py [-h] [--debug] [--version] [--listen IFNAME]
                               [--broadcast IFNAME]
-                              IFNAME [IFNAME ...]
+                              [IFNAME [IFNAME ...]]
 
     Proxy Ubiquiti discovery requests.
 
