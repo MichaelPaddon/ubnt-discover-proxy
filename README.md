@@ -8,28 +8,41 @@ EdgeOS version 2 devices.
 
 ## Quick Start
 
-If your cloudkey is on eth0 and your clients are on eth1 and eth2,
+If you have devices on eth0 and eth1,
 the command:
 
-    # python ubnt-discover-proxy.py --listen eth1 eth2 --broadcast eth0
+    # python ubnt-discover-proxy.py eth0 eth1
 
-will proxy discovery packets broadcast on eth1 and eth2 onto eth0.
+will listen for discovery packets broadcast on either network and rebroadcast
+them to the other network.
+
+Sometimes you can only listen and not broadcast to an interface.
+For instance, if you also have devices on wg0, the command:
+
+    # python ubnt-discover-proxy.py --listen wg0 eth0 eth1
+
+will listen for broadcasts on wg0 but never broadcast to it.
 
 ## Usage
 
-    usage: ubnt-discover-proxy.py [-h] [--debug] [--listen IFNAME [IFNAME ...]]
-                          [--broadcast IFNAME [IFNAME ...]]
+    usage: ubnt-discover-proxy.py [-h] [--debug] [--version] [--listen IFNAME]
+                              [--broadcast IFNAME]
+                              IFNAME [IFNAME ...]
 
     Proxy Ubiquiti discovery requests.
 
+    positional arguments:
+      IFNAME              both listen to and broadcast on these interfaces
+
     optional arguments:
-    -h, --help            show this help message and exit
-    --debug
-    --listen IFNAME [IFNAME ...]
-                          interfaces to listen on
-    --broadcast IFNAME [IFNAME ...]
-                          interfaces to broadcast to
+      -h, --help          show this help message and exit
+      --debug             run in foreground and produce debug output
+      --version           print version number
+      --listen IFNAME     only listen on this interface
+      --broadcast IFNAME  only broadcast to this interface
 
 ## Limitations
 
-You can't both listen on and broadcast to a network (yet).
+The proxy learns which interface each address is on.
+Therefore, if you reconfigure your network addressing, you will
+need to restart the proxy.

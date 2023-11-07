@@ -6,7 +6,10 @@ import select
 import socket
 import struct
 import sys
+import time
 import traceback
+
+__version__ = "0.1"
 
 u32 = struct.Struct("!I")
 ip_header = struct.Struct("!BBHHHBBHII")
@@ -48,17 +51,26 @@ def proxy(listen_ifnames, broadcast_ifnames):
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         broadcasters.append((ifname, s))
 
+    addr_ifname = {}
     while True:
         for fd, event in  poll.poll():
             if event == select.POLLIN:
-                ifname, s = listeners[fd]
+                srcifname, s = listeners[fd]
                 payload, (srcaddr, srcport) = s.recvfrom(1024)
-                logging.debug("discovery from %s:%d", srcaddr, srcport)
+                logging.debug("discovery from %s:%s:%d",
+                    srcifname, srcaddr, srcport)
+
+                if srcaddr not in addr_ifname:
+                    addr_ifname[srcaddr] = srcifname
+                elif srcifname != addr_ifname[srcaddr]:
+                    continue
 
                 packet = udp_packet(srcaddr, srcport,
                     "255.255.255.255", 10001, payload)
-                for ifname, s in broadcasters:
-                    logging.debug("broadcasting to %s", ifname)
+                for dstifname, s in broadcasters:
+                    if dstifname  == srcifname:
+                        continue
+                    logging.debug("broadcasting to %s", dstifname)
                     s.sendto(packet, ("255.255.255.255", 0))
 
 def daemonize():
@@ -84,16 +96,17 @@ def daemonize():
 def main():
     parser = argparse.ArgumentParser(
         description = "Proxy Ubiquiti discovery requests.")
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--listen", nargs="+", metavar = "IFNAME",
-        help = "interfaces to listen on")
-    parser.add_argument("--broadcast", nargs="+", metavar = "IFNAME",
-        help = "interfaces to broadcast to")
+    parser.add_argument("--debug", action="store_true",
+        help = "run in foreground and produce debug output")
+    parser.add_argument("--version", action="version", version = __version__,
+        help = "print version number")
+    parser.add_argument("--listen", metavar = "IFNAME", action = "append",
+        help = "only listen on this interface")
+    parser.add_argument("--broadcast", metavar = "IFNAME", action = "append",
+        help = "only broadcast to this interface")
+    parser.add_argument("ifnames", nargs="+", metavar = "IFNAME",
+        help = "both listen to and broadcast on these interfaces")
     args = parser.parse_args()
-
-    for ifname in args.listen:
-        if ifname in args.broadcast:
-            raise RuntimeError("can't listen and broadcast on same interface", ifname)
 
     if args.debug:
         logging.basicConfig(stream = sys.stdout,
@@ -110,7 +123,10 @@ def main():
 
     try:
         logging.info("starting")
-        proxy(args.listen, args.broadcast)
+        ifnames = args.ifnames or []
+        listen_ifnames = args.listen or []
+        broadcast_ifnames = args.broadcast or []
+        proxy(ifnames + listen_ifnames, ifnames + broadcast_ifnames)
     except Exception as e:
         logging.critical("terminating: %s", str(e))
         if args.debug:
